@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: deployment/local/Dockerfile
+    ports:
+      - "3000:3000"
+    env_file:
+      - deployment/local/.env.local
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./index.js:/app/index.js
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    container_name: booking_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: booking
+      POSTGRES_PASSWORD: booking123
+      POSTGRES_DB: bookingdb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U booking -d bookingdb"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres_data:
