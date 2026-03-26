@@ -353,12 +353,19 @@ workflows:
           filters:
             branches:
               only:
-                - qa
-                - production
-      - build_docker_image
+                - main
+      - build_docker_image:
+          filters:
+            branches:
+              only:
+                - main
       - run_unit_tests:
           requires:
             - build_docker_image
+          filters:
+            branches:
+              only:
+                - main
       - run_database_migrations:
           requires:
             - run_unit_tests
@@ -366,13 +373,11 @@ workflows:
           filters:
             branches:
               only:
-                - qa
-                - production
+                - main
       - deploy_the_application:
           requires:
             - run_database_migrations
           filters:
             branches:
               only:
-                - qa
-                - production
+                - main
