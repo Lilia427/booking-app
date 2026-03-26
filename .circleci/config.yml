@@ -1,0 +1,378 @@
+# CircleCI environment variables needed:
+# AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION (eu-north-1),
+# AWS_ACCOUNT_ID, PROJECT_NAME (booking)
+
+version: 2.1
+orbs:
+  aws-cli: circleci/aws-cli@4.1.3
+
+jobs:
+
+  init_update_infrastructure:
+    machine:
+      image: ubuntu-2204:2024.04.4
+    resource_class: medium
+    environment:
+      AWS_CONFIG_FILE: /home/circleci/project/config
+    steps:
+      - checkout
+      - aws-cli/setup:
+          profile_name: booking-terraform
+      - configure_aws_credentials
+      - run:
+          name: Check Changes
+          command: |
+            set -ex
+            # Check whether terraform files have any updates
+            if git diff --name-status HEAD^ HEAD | grep -q terraform; then
+              echo "Terraform files changed, infrastructure update needed"
+              echo 'export update_infra=true' >> $BASH_ENV
+            else
+              echo "No terraform changes detected"
+              echo 'export update_infra=false' >> $BASH_ENV
+            fi
+      - run:
+          name: Run terraform commands
+          command: |
+            set -ex
+            if [[ "$update_infra" == "true" ]]; then
+              # Install Terraform CLI
+              wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+              echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+              sudo apt update && sudo apt install terraform=1.8.*
+
+              # Get current image to preserve it during infra update
+              TASK_DEFINITION_ARN=$(aws ecs describe-services \
+                --profile booking-terraform \
+                --region $AWS_DEFAULT_REGION \
+                --cluster ${CIRCLE_BRANCH}-${PROJECT_NAME}-backend \
+                --services ${CIRCLE_BRANCH}-${PROJECT_NAME}-backend \
+                --query 'services[0].taskDefinition' --output text 2>/dev/null || echo "")
+
+              if [[ -n "$TASK_DEFINITION_ARN" && "$TASK_DEFINITION_ARN" != "None" ]]; then
+                BACKEND_IMAGE=$(aws ecs describe-task-definition \
+                  --profile booking-terraform \
+                  --task-definition $TASK_DEFINITION_ARN \
+                  --query 'taskDefinition.containerDefinitions[0].image' --output text)
+                echo "export TF_VAR_app_image=$BACKEND_IMAGE" >> $BASH_ENV
+              else
+                echo 'export TF_VAR_app_image=node:20-alpine' >> $BASH_ENV
+                echo 'export TF_VAR_task_desired_count=0' >> $BASH_ENV
+              fi
+
+              source $BASH_ENV
+
+              # Inject secrets into container definitions
+              inject_secrets
+
+              cd .terraform_files/
+              terraform init
+              terraform workspace select -or-create=true ${CIRCLE_BRANCH}
+              terraform plan -input=false -var-file=environments/${CIRCLE_BRANCH}.tfvars
+              terraform apply -auto-approve -var-file=environments/${CIRCLE_BRANCH}.tfvars
+            fi
+
+  build_docker_image:
+    machine:
+      image: ubuntu-2204:2024.04.4
+    resource_class: medium
+    environment:
+      AWS_CONFIG_FILE: /home/circleci/project/config
+    steps:
+      - checkout
+      - aws-cli/setup:
+          profile_name: booking-terraform
+      - configure_aws_credentials
+      - run:
+          name: Build Docker image
+          command: |
+            set -ex
+            # Login into ECR
+            aws ecr get-login-password \
+              --region $AWS_DEFAULT_REGION \
+              --profile booking-terraform | \
+              docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+
+            # Build production Dockerfile
+            docker build --platform linux/amd64 \
+              -f deployment/Dockerfile . \
+              -t ${PROJECT_NAME}-backend
+
+            docker save -o docker_image_backend.tar ${PROJECT_NAME}-backend
+      - persist_to_workspace:
+          root: ./
+          paths:
+            - ./
+
+  run_unit_tests:
+    machine:
+      image: ubuntu-2204:2024.04.4
+    resource_class: medium
+    steps:
+      - attach_workspace:
+          at: ./
+      - run:
+          name: Run unit tests
+          command: |
+            set -ex
+            docker load -i docker_image_backend.tar
+            # TODO: add tests when ready
+            echo "Tests placeholder — add npm test when tests are implemented"
+
+  run_database_migrations:
+    machine:
+      image: ubuntu-2204:2024.04.4
+    resource_class: medium
+    environment:
+      AWS_CONFIG_FILE: /home/circleci/project/config
+    steps:
+      - attach_workspace:
+          at: ./
+      - aws-cli/setup:
+          profile_name: booking-terraform
+      - configure_aws_credentials
+      - run:
+          name: Install jq
+          command: |
+            sudo apt-get update && sudo apt-get install -y jq
+      - run:
+          name: Create env file for migrations
+          command: |
+            set -ex
+            # Pull environment variables from Secrets Manager
+            aws secretsmanager get-secret-value \
+              --profile booking-terraform \
+              --secret-id "$CIRCLE_BRANCH/$PROJECT_NAME/backend-new" \
+              --region $AWS_DEFAULT_REGION | jq -r '.SecretString' | \
+              jq -r "to_entries|map(\"\(.key)=\\\"\(.value|tostring)\\\"\")|.[]" > deployment/migrations/.env
+
+            # Pull environment variables from Parameter Store
+            aws ssm get-parameters-by-path \
+              --profile booking-terraform \
+              --region $AWS_DEFAULT_REGION \
+              --path /be/${CIRCLE_BRANCH}/${PROJECT_NAME}/ \
+              --with-decryption --recursive \
+              --query "Parameters[*].[Name,Value]" --output text | \
+              awk '{print $1 "=" $2}' | \
+              sed "s/\t/\n/g; s@/be/${CIRCLE_BRANCH}/${PROJECT_NAME}/@@g" >> deployment/migrations/.env
+
+            # Pull DB username and password from RDS Secrets Manager
+            export db_name=${CIRCLE_BRANCH}-${PROJECT_NAME}
+            export secrets_manager=$(aws secretsmanager list-secrets \
+              --region $AWS_DEFAULT_REGION \
+              --profile booking-terraform | \
+              jq -r --arg db_name "$db_name" '.SecretList[] | select(.Description != null and (.Description | contains(":db:" + $db_name))) | .Name')
+
+            export user_name=$(aws secretsmanager get-secret-value \
+              --region $AWS_DEFAULT_REGION \
+              --profile booking-terraform \
+              --secret-id "$secrets_manager" \
+              --query 'SecretString' | jq -r '. | fromjson | .username')
+
+            export password=$(aws secretsmanager get-secret-value \
+              --region $AWS_DEFAULT_REGION \
+              --profile booking-terraform \
+              --secret-id "$secrets_manager" \
+              --query 'SecretString' | jq -r '. | fromjson | .password')
+
+            echo "PGUSER=$user_name" >> deployment/migrations/.env
+            echo "PGPASSWORD=$password" >> deployment/migrations/.env
+      - run:
+          name: Run database migrations
+          command: |
+            set -ex
+            # Install the SSM session manager plugin
+            curl "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" -o "session-manager-plugin.deb"
+            sudo dpkg -i session-manager-plugin.deb
+
+            # Get DB connection details via SSM
+            host=$(aws ssm get-parameter --region $AWS_DEFAULT_REGION \
+              --profile booking-terraform \
+              --name /be/${CIRCLE_BRANCH}/${PROJECT_NAME}/DB_HOST \
+              --with-decryption | jq -r '.Parameter.Value')
+
+            port=$(aws ssm get-parameter --region $AWS_DEFAULT_REGION \
+              --profile booking-terraform \
+              --name /be/${CIRCLE_BRANCH}/${PROJECT_NAME}/DB_PORT \
+              --with-decryption | jq -r '.Parameter.Value')
+
+            bastion=$(aws ec2 describe-instances --region $AWS_DEFAULT_REGION \
+              --profile booking-terraform \
+              --query "Reservations[].Instances[?State.Name=='running' && Tags[?Key=='Name' && Value=='${CIRCLE_BRANCH}-${PROJECT_NAME}-bastion']].[InstanceId]" \
+              --output text)
+
+            # Start SSM port forwarding to RDS through bastion
+            aws ssm start-session --profile booking-terraform \
+              --region $AWS_DEFAULT_REGION \
+              --target "$bastion" \
+              --document-name AWS-StartPortForwardingSessionToRemoteHost \
+              --parameters host="$host",portNumber="$port",localPortNumber="$port" &
+
+            sleep 5
+
+            # Run migrations
+            docker load -i docker_image_backend.tar
+            cd deployment/migrations
+            sed -i "s@IMAGE_NAME@${PROJECT_NAME}-backend@" docker-compose.yml
+            docker-compose up -d
+            sleep 5
+            docker exec backend sh -c 'npm run migrate'
+
+  deploy_the_application:
+    machine:
+      image: ubuntu-2204:2024.04.4
+    resource_class: medium
+    environment:
+      AWS_CONFIG_FILE: /home/circleci/project/config
+    steps:
+      - attach_workspace:
+          at: ./
+      - aws-cli/setup:
+          profile_name: booking-terraform
+      - configure_aws_credentials
+      - run:
+          name: Push Docker image to ECR
+          command: |
+            set -ex
+            aws ecr get-login-password \
+              --region $AWS_DEFAULT_REGION \
+              --profile booking-terraform | \
+              docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+
+            docker load -i docker_image_backend.tar
+            docker tag ${PROJECT_NAME}-backend:latest \
+              $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/${CIRCLE_BRANCH}-${PROJECT_NAME}:backend-<<pipeline.number>>-${CIRCLE_SHA1}
+            docker push \
+              $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/${CIRCLE_BRANCH}-${PROJECT_NAME}:backend-<<pipeline.number>>-${CIRCLE_SHA1}
+      - run:
+          name: Prepare container definitions with secrets
+          command: |
+            set -ex
+            echo "export TF_VAR_app_image=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/${CIRCLE_BRANCH}-${PROJECT_NAME}:backend-<<pipeline.number>>-${CIRCLE_SHA1}" >> $BASH_ENV
+            source $BASH_ENV
+            inject_secrets
+      - run:
+          name: Deploy the application
+          command: |
+            set -ex
+            wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+            echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+            sudo apt update && sudo apt install terraform=1.8.*
+            cd .terraform_files/
+            terraform init
+            terraform workspace select -or-create=true ${CIRCLE_BRANCH}
+            terraform plan -input=false -var-file=environments/${CIRCLE_BRANCH}.tfvars
+            terraform apply -auto-approve -var-file=environments/${CIRCLE_BRANCH}.tfvars
+      - run:
+          name: Wait for deployment to stabilize
+          command: |
+            set -ex
+            aws ecs wait services-stable \
+              --profile booking-terraform \
+              --cluster ${CIRCLE_BRANCH}-${PROJECT_NAME}-backend \
+              --services ${CIRCLE_BRANCH}-${PROJECT_NAME}-backend \
+              --region $AWS_DEFAULT_REGION
+
+commands:
+  configure_aws_credentials:
+    steps:
+      - run:
+          name: Create AWS Config File
+          command: |
+            echo \
+            "[profile booking-terraform]
+            aws_access_key_id=$AWS_ACCESS_KEY_ID
+            aws_secret_access_key=$AWS_SECRET_ACCESS_KEY
+            region=$AWS_DEFAULT_REGION
+            output=json" > config
+
+  inject_secrets:
+    description: "Inject SSM + Secrets Manager vars into container-definitions template"
+    steps:
+      - run:
+          name: Inject secrets into container definitions
+          command: |
+            set -ex
+            # Pull SSM parameter names
+            aws ssm get-parameters-by-path \
+              --profile booking-terraform \
+              --region $AWS_DEFAULT_REGION \
+              --path /be/${CIRCLE_BRANCH}/${PROJECT_NAME}/ \
+              --recursive \
+              --query "Parameters[*].Name" \
+              --output text | sed "s/\t/\n/g; s@/be/${CIRCLE_BRANCH}/${PROJECT_NAME}/@@g" > .env-vars
+
+            # Build secrets array from SSM parameters
+            json_data=$(cat .terraform_files/modules/ecs_fargate/templates/container-definitions.json.tpl)
+            secrets_array="[]"
+            while IFS= read -r var_name; do
+              secrets_array=$(echo $secrets_array | jq --arg vn "$var_name" --arg vf "/be/${CIRCLE_BRANCH}/${PROJECT_NAME}/$var_name" '. += [{"name": $vn, "valueFrom": $vf}]')
+            done < .env-vars
+            updated_json=$(echo $json_data | jq --argjson secrets "$secrets_array" '.[0].secrets = $secrets')
+            echo "$updated_json" > '.terraform_files/modules/ecs_fargate/templates/container-definitions.json.tpl'
+
+            # Pull Secrets Manager keys and inject
+            aws secretsmanager get-secret-value \
+              --profile booking-terraform \
+              --secret-id "$CIRCLE_BRANCH/$PROJECT_NAME/backend-new" \
+              --region $AWS_DEFAULT_REGION | jq -r '.SecretString' | \
+              jq -r "to_entries|map(\"\(.key)=\\\"\(.value|tostring)\\\"\")|.[]" | cut -f1 -d'=' > .env
+
+            secrets_manager_arn=$(aws secretsmanager describe-secret \
+              --profile booking-terraform \
+              --secret-id "$CIRCLE_BRANCH/$PROJECT_NAME/backend-new" \
+              --query 'ARN' --output text)
+
+            json_data=$(cat '.terraform_files/modules/ecs_fargate/templates/container-definitions.json.tpl')
+            while IFS= read -r var_name; do
+              json_data=$(echo $json_data | jq --arg vn "$var_name" --arg vf "$secrets_manager_arn:$var_name::" '.[0].secrets += [{"name": $vn, "valueFrom": $vf}]')
+            done < .env
+            echo "$json_data" > '.terraform_files/modules/ecs_fargate/templates/container-definitions.json.tpl'
+
+            # Pull RDS credentials and inject
+            export db_name=${CIRCLE_BRANCH}-${PROJECT_NAME}
+            export secrets_manager=$(aws secretsmanager list-secrets \
+              --region $AWS_DEFAULT_REGION \
+              --profile booking-terraform | \
+              jq -r --arg db_name "$db_name" '.SecretList[] | select(.Description != null and (.Description | contains(":db:" + $db_name))) | .Name')
+
+            secrets_manager_arn=$(aws secretsmanager describe-secret \
+              --profile booking-terraform \
+              --secret-id "$secrets_manager" \
+              --query 'ARN' --output text)
+
+            json_data=$(cat '.terraform_files/modules/ecs_fargate/templates/container-definitions.json.tpl')
+            json_data=$(echo $json_data | jq --arg vf "$secrets_manager_arn:username::" '.[0].secrets += [{"name": "PGUSER", "valueFrom": $vf}]')
+            json_data=$(echo $json_data | jq --arg vf "$secrets_manager_arn:password::" '.[0].secrets += [{"name": "PGPASSWORD", "valueFrom": $vf}]')
+            echo "$json_data" > '.terraform_files/modules/ecs_fargate/templates/container-definitions.json.tpl'
+
+workflows:
+  deploy:
+    jobs:
+      - init_update_infrastructure:
+          filters:
+            branches:
+              only:
+                - qa
+                - production
+      - build_docker_image
+      - run_unit_tests:
+          requires:
+            - build_docker_image
+      - run_database_migrations:
+          requires:
+            - run_unit_tests
+            - init_update_infrastructure
+          filters:
+            branches:
+              only:
+                - qa
+                - production
+      - deploy_the_application:
+          requires:
+            - run_database_migrations
+          filters:
+            branches:
+              only:
+                - qa
+                - production
