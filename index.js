@@ -26,6 +26,11 @@ const pool = new Pool({
     port: process.env.PGPORT,
 });
 
+// Root
+app.get("/", (req, res) => {
+    res.json({ service: "booking-api", version: "1.0.0" });
+});
+
 // Health check (потрібен для ALB)
 app.get("/health", async (req, res) => {
     try {
@@ -33,6 +38,17 @@ app.get("/health", async (req, res) => {
         res.status(200).json({ status: "ok" });
     } catch (err) {
         res.status(503).json({ status: "error", message: "Database connection failed" });
+    }
+});
+
+// GET /bookings
+app.get("/bookings", async (req, res) => {
+    try {
+        const result = await pool.query("SELECT * FROM bookings ORDER BY id DESC");
+        res.json(result.rows);
+    } catch (err) {
+        console.error("DB query error:", err);
+        res.status(500).json({ error: "Database error" });
     }
 });
 
