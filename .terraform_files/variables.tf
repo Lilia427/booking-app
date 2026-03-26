@@ -35,7 +35,7 @@ variable "db_engine" {
 }
 
 variable "db_engine_version" {
-  default = "16.2"
+  default = "16.6"
 }
 
 variable "db_minor_version_upgrade" {

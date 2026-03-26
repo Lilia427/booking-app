@@ -1,7 +1,7 @@
 ##### REQUIRED #######
 project_name       = "booking"
 region             = "eu-north-1"
-db_engine_version  = "16.2"
+db_engine_version  = "16.6"
 db_instance_class  = "db.t4g.micro"
 db_storage         = 20
 db_max_storage     = 30
