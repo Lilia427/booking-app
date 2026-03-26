@@ -6,4 +6,4 @@ services:
     container_name: backend
     env_file:
       - .env
-    entrypoint: ["npm", "run", "migrate"]
+    entrypoint: ["sleep", "3600"]

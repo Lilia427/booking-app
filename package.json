@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node index.js",
-    "dev": "node --watch index.js"
+    "dev": "node --watch index.js",
+    "migrate": "echo 'No migrations configured yet'"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
