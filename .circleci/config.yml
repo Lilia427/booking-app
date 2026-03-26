@@ -62,9 +62,6 @@ jobs:
 
               source $BASH_ENV
 
-              # Inject secrets into container definitions
-              inject_secrets
-
               cd .terraform_files/
               terraform init
               terraform workspace select -or-create=true ${CIRCLE_BRANCH}
@@ -245,12 +242,10 @@ jobs:
             docker push \
               $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/${CIRCLE_BRANCH}-${PROJECT_NAME}:backend-<<pipeline.number>>-${CIRCLE_SHA1}
       - run:
-          name: Prepare container definitions with secrets
+          name: Set app image
           command: |
-            set -ex
             echo "export TF_VAR_app_image=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/${CIRCLE_BRANCH}-${PROJECT_NAME}:backend-<<pipeline.number>>-${CIRCLE_SHA1}" >> $BASH_ENV
-            source $BASH_ENV
-            inject_secrets
+      - inject_secrets
       - run:
           name: Deploy the application
           command: |
