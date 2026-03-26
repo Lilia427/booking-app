@@ -14,9 +14,9 @@
         },
         "portMappings": [
             {
-            "hostPort": ${app_port},
+            "hostPort": 3000,
             "protocol": "tcp",
-            "containerPort": ${app_port}
+            "containerPort": 3000
             }
         ]
     }
