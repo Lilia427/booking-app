@@ -213,13 +213,12 @@ jobs:
               --name /be/${CIRCLE_BRANCH}/${PROJECT_NAME}/DB_NAME \
               --with-decryption | jq -r '.Parameter.Value')
 
-            # Get credentials from .env (already written in previous step)
-            pguser=$(grep '^PGUSER=' deployment/migrations/.env | cut -d'=' -f2)
-            pgpassword=$(grep '^PGPASSWORD=' deployment/migrations/.env | cut -d'=' -f2)
-
-            # Add DATABASE_URL pointing to localhost (SSM tunnel maps RDS to localhost)
-            # sslmode=require needed because RDS requires SSL connections
-            echo "DATABASE_URL=postgres://${pguser}:${pgpassword}@localhost:${port}/${db_name_val}?sslmode=require" >> deployment/migrations/.env
+            # Add standard PG* vars for node-pg-migrate.
+            # 127.0.0.1 is required because the SSM tunnel is opened on the host machine.
+            echo "PGHOST=127.0.0.1" >> deployment/migrations/.env
+            echo "PGPORT=${port}" >> deployment/migrations/.env
+            echo "PGDATABASE=${db_name_val}" >> deployment/migrations/.env
+            echo "PGSSLMODE=require" >> deployment/migrations/.env
 
             # Run migrations
             docker load -i docker_image_backend.tar
