@@ -218,7 +218,8 @@ jobs:
             pgpassword=$(grep '^PGPASSWORD=' deployment/migrations/.env | cut -d'=' -f2)
 
             # Add DATABASE_URL pointing to localhost (SSM tunnel maps RDS to localhost)
-            echo "DATABASE_URL=postgres://${pguser}:${pgpassword}@localhost:${port}/${db_name_val}" >> deployment/migrations/.env
+            # sslmode=require needed because RDS requires SSL connections
+            echo "DATABASE_URL=postgres://${pguser}:${pgpassword}@localhost:${port}/${db_name_val}?sslmode=require" >> deployment/migrations/.env
 
             # Run migrations
             docker load -i docker_image_backend.tar
