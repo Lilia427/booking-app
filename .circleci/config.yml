@@ -218,7 +218,8 @@ jobs:
             echo "PGHOST=127.0.0.1" >> deployment/migrations/.env
             echo "PGPORT=${port}" >> deployment/migrations/.env
             echo "PGDATABASE=${db_name_val}" >> deployment/migrations/.env
-            echo "PGSSLMODE=require" >> deployment/migrations/.env
+            echo "PGSSLMODE=no-verify" >> deployment/migrations/.env
+            echo "NODE_TLS_REJECT_UNAUTHORIZED=0" >> deployment/migrations/.env
 
             # Run migrations
             docker load -i docker_image_backend.tar
