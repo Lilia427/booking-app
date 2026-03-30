@@ -207,6 +207,19 @@ jobs:
 
             sleep 5
 
+            # Get DB name from SSM
+            db_name_val=$(aws ssm get-parameter --region $AWS_DEFAULT_REGION \
+              --profile booking-terraform \
+              --name /be/${CIRCLE_BRANCH}/${PROJECT_NAME}/DB_NAME \
+              --with-decryption | jq -r '.Parameter.Value')
+
+            # Get credentials from .env (already written in previous step)
+            pguser=$(grep '^PGUSER=' deployment/migrations/.env | cut -d'=' -f2)
+            pgpassword=$(grep '^PGPASSWORD=' deployment/migrations/.env | cut -d'=' -f2)
+
+            # Add DATABASE_URL pointing to localhost (SSM tunnel maps RDS to localhost)
+            echo "DATABASE_URL=postgres://${pguser}:${pgpassword}@localhost:${port}/${db_name_val}" >> deployment/migrations/.env
+
             # Run migrations
             docker load -i docker_image_backend.tar
             cd deployment/migrations
