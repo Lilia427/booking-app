@@ -4,6 +4,7 @@ services:
   backend:
     image: IMAGE_NAME:latest
     container_name: backend
+    network_mode: host
     env_file:
       - .env
     entrypoint: ["sleep", "3600"]
