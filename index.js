@@ -21,23 +21,14 @@ app.use((req, res, next) => {
     next();
 });
 
-// PostgreSQL connection
+// Підключення до PostgreSQL
 const pool = new Pool({
     user: process.env.PGUSER || process.env.DB_USER,
     password: process.env.PGPASSWORD || process.env.DB_PASSWORD,
     host: process.env.PGHOST || process.env.DB_HOST,
     database: process.env.PGDATABASE || process.env.DB_NAME,
     port: process.env.PGPORT || process.env.DB_PORT,
-    ssl: shouldUseDbSsl
-        ? {
-              rejectUnauthorized: false,
-          }
-        : false,
-});
-
-// Root
-app.get("/", (req, res) => {
-    res.json({ service: "cottage-booking-api", version: "1.0.0" });
+    ssl: shouldUseDbSsl ? { rejectUnauthorized: false } : false,
 });
 
 // Health check (потрібен для ALB)
@@ -50,83 +41,19 @@ app.get("/health", async (req, res) => {
     }
 });
 
-// ==================== COTTAGES ====================
+// POST /booking — приймає поля
+app.post("/booking", async (req, res) => {
+    const { checkIn, checkOut, adults, kids } = req.body;
 
-app.get("/cottages", async (req, res) => {
-    try {
-        const result = await pool.query("SELECT * FROM cottages ORDER BY id");
-        res.json(result.rows);
-    } catch (err) {
-        console.error("DB query error:", err);
-        res.status(500).json({ error: "Database error" });
+    if (!checkIn || !checkOut || !adults || !kids) {
+        return res.status(400).json({ error: "All fields are required" });
     }
-});
 
-app.get("/cottages/:id", async (req, res) => {
-    try {
-        const result = await pool.query("SELECT * FROM cottages WHERE id = $1", [req.params.id]);
-        if (result.rows.length === 0) return res.status(404).json({ error: "Cottage not found" });
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error("DB query error:", err);
-        res.status(500).json({ error: "Database error" });
-    }
-});
-
-// ==================== BOOKINGS ====================
-
-app.get("/bookings", async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT b.*, c.name AS cottage_name
-            FROM bookings b
-            JOIN cottages c ON c.id = b.cottage_id
-            ORDER BY b.created_at DESC
-        `);
-        res.json(result.rows);
-    } catch (err) {
-        console.error("DB query error:", err);
-        res.status(500).json({ error: "Database error" });
-    }
-});
-
-app.get("/bookings/cottage/:cottageId", async (req, res) => {
     try {
         const result = await pool.query(
-            "SELECT * FROM bookings WHERE cottage_id = $1 ORDER BY check_in",
-            [req.params.cottageId]
-        );
-        res.json(result.rows);
-    } catch (err) {
-        console.error("DB query error:", err);
-        res.status(500).json({ error: "Database error" });
-    }
-});
-
-app.post("/bookings", async (req, res) => {
-    const { cottageId, checkIn, checkOut, guestName, guestPhone, adults, kids } = req.body;
-
-    if (!cottageId || !checkIn || !checkOut || !guestName || !guestPhone) {
-        return res.status(400).json({
-            error: "cottageId, checkIn, checkOut, guestName, guestPhone are required",
-        });
-    }
-
-    try {
-        const conflict = await pool.query(
-            `SELECT id FROM bookings
-             WHERE cottage_id = $1 AND status != 'cancelled'
-               AND check_in < $3 AND check_out > $2`,
-            [cottageId, checkIn, checkOut]
-        );
-        if (conflict.rows.length > 0) {
-            return res.status(409).json({ error: "Cottage is already booked for these dates" });
-        }
-
-        const result = await pool.query(
-            `INSERT INTO bookings (cottage_id, check_in, check_out, guest_name, guest_phone, adults, kids)
-             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-            [cottageId, checkIn, checkOut, guestName, guestPhone, adults || 1, kids || 0]
+            `INSERT INTO bookings (check_in, check_out, adults, kids)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+            [checkIn, checkOut, adults, kids]
         );
         res.status(201).json(result.rows[0]);
     } catch (err) {
@@ -135,39 +62,7 @@ app.post("/bookings", async (req, res) => {
     }
 });
 
-app.put("/bookings/:id/status", async (req, res) => {
-    const { status } = req.body;
-    const validStatuses = ["pending", "confirmed", "cancelled"];
-
-    if (!validStatuses.includes(status)) {
-        return res.status(400).json({ error: `Status must be one of: ${validStatuses.join(", ")}` });
-    }
-
-    try {
-        const result = await pool.query(
-            "UPDATE bookings SET status = $1 WHERE id = $2 RETURNING *",
-            [status, req.params.id]
-        );
-        if (result.rows.length === 0) return res.status(404).json({ error: "Booking not found" });
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error("DB update error:", err);
-        res.status(500).json({ error: "Database error" });
-    }
-});
-
-app.delete("/bookings/:id", async (req, res) => {
-    try {
-        const result = await pool.query("DELETE FROM bookings WHERE id = $1 RETURNING *", [req.params.id]);
-        if (result.rows.length === 0) return res.status(404).json({ error: "Booking not found" });
-        res.json({ message: "Booking deleted" });
-    } catch (err) {
-        console.error("DB delete error:", err);
-        res.status(500).json({ error: "Database error" });
-    }
-});
-
-// Graceful shutdown
+// Запуск сервера
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, () =>
     console.log(`Server running on port ${PORT}`)
