@@ -11,6 +11,8 @@
     "migrate:create": "node-pg-migrate create --migration-file-language sql"
   },
   "dependencies": {
+    "@sentry/node": "^10.47.0",
+    "@sentry/profiling-node": "^10.47.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "node-pg-migrate": "^8.0.4",
