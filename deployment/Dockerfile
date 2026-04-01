@@ -16,6 +16,7 @@ WORKDIR /app
 COPY --from=builder /app/node_modules ./node_modules
 COPY package*.json ./
 COPY index.js ./
+COPY instrument.js ./
 COPY migrations ./migrations
 
 ENV NODE_ENV=production
