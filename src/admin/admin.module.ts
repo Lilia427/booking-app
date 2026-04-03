@@ -10,5 +10,6 @@ import { TokenBlacklistService } from './token-blacklist.service';
   imports: [TypeOrmModule.forFeature([AdminEntity])],
   controllers: [UserController],
   providers: [UserService, AdminJwtAuthGuard, TokenBlacklistService],
+  exports: [TokenBlacklistService, AdminJwtAuthGuard],
 })
 export class AdminModule {}
