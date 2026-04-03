@@ -4,7 +4,10 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci
+
+COPY . .
+RUN npm run build
 
 # ---- Production stage ----
 FROM node:20-alpine
@@ -13,11 +16,10 @@ RUN addgroup -S booking && adduser -S booking -G booking
 
 WORKDIR /app
 
-COPY --from=builder /app/node_modules ./node_modules
 COPY package*.json ./
-COPY index.js ./
-COPY instrument.js ./
-COPY migrations ./migrations
+RUN npm ci --omit=dev
+
+COPY --from=builder /app/dist ./dist
 
 ENV NODE_ENV=production
 
@@ -28,4 +30,4 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget -qO- http://localhost:3000/health || exit 1
 
-CMD ["node", "index.js"]
+CMD ["node", "dist/main.js"]
