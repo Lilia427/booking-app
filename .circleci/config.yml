@@ -359,6 +359,9 @@ commands:
             json_data=$(cat '.terraform_files/modules/ecs_fargate/templates/container-definitions.json.tpl')
             json_data=$(echo $json_data | jq --arg vf "$secrets_manager_arn:username::" '.[0].secrets += [{"name": "PGUSER", "valueFrom": $vf}]')
             json_data=$(echo $json_data | jq --arg vf "$secrets_manager_arn:password::" '.[0].secrets += [{"name": "PGPASSWORD", "valueFrom": $vf}]')
+            # NestJS TypeORM uses DB_USER / DB_PASSWORD
+            json_data=$(echo $json_data | jq --arg vf "$secrets_manager_arn:username::" '.[0].secrets += [{"name": "DB_USER", "valueFrom": $vf}]')
+            json_data=$(echo $json_data | jq --arg vf "$secrets_manager_arn:password::" '.[0].secrets += [{"name": "DB_PASSWORD", "valueFrom": $vf}]')
             echo "$json_data" > '.terraform_files/modules/ecs_fargate/templates/container-definitions.json.tpl'
 
 workflows:
