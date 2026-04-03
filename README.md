@@ -62,3 +62,4 @@ booking-app/
 ├── .terraform_files/           # Infrastructure as Code (Terraform)
 └── .circleci/                  # CI/CD pipeline
 ```
+
