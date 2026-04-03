@@ -213,13 +213,19 @@ jobs:
               --name /be/${CIRCLE_BRANCH}/${PROJECT_NAME}/DB_NAME \
               --with-decryption | jq -r '.Parameter.Value')
 
-            # Add standard PG* vars for node-pg-migrate.
-            # 127.0.0.1 is required because the SSM tunnel is opened on the host machine.
+            # Override DB vars to route through SSM tunnel (127.0.0.1).
+            # TypeORM data-source uses DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD
+            echo "DB_HOST=127.0.0.1" >> deployment/migrations/.env
+            echo "DB_PORT=${port}" >> deployment/migrations/.env
+            echo "DB_NAME=${db_name_val}" >> deployment/migrations/.env
+            echo "DB_USER=$user_name" >> deployment/migrations/.env
+            echo "DB_PASSWORD=$password" >> deployment/migrations/.env
+            echo "PGSSLMODE=no-verify" >> deployment/migrations/.env
+            echo "NODE_TLS_REJECT_UNAUTHORIZED=0" >> deployment/migrations/.env
+            # Legacy PG* vars (kept for compatibility)
             echo "PGHOST=127.0.0.1" >> deployment/migrations/.env
             echo "PGPORT=${port}" >> deployment/migrations/.env
             echo "PGDATABASE=${db_name_val}" >> deployment/migrations/.env
-            echo "PGSSLMODE=no-verify" >> deployment/migrations/.env
-            echo "NODE_TLS_REJECT_UNAUTHORIZED=0" >> deployment/migrations/.env
 
             # Run migrations
             docker load -i docker_image_backend.tar
