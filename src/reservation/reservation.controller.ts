@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, ParseIntPipe } from '@nestjs/common';
 import { ReservationService } from './reservation.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
@@ -11,6 +11,16 @@ export class ReservationController {
   @Post()
   create(@Body() createReservationDto: CreateReservationDto) {
     return this.reservationService.create(createReservationDto);
+  }
+
+  @Get('booked-dates')
+  getBookedDates() {
+    return this.reservationService.getBookedDates();
+  }
+
+  @Get('booked-dates/:roomType')
+  getBookedDatesByRoomType(@Param('roomType', ParseIntPipe) roomType: number) {
+    return this.reservationService.getBookedDatesByRoomType(roomType);
   }
 
   @UseGuards(AdminJwtAuthGuard)

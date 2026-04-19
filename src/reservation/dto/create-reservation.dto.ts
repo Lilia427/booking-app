@@ -14,7 +14,7 @@ export class CreateReservationDto {
     children?: number;
 
     @IsNotEmpty()
-    roomType: string;
+    roomType: number;
 
     @IsNotEmpty()
     name: string;

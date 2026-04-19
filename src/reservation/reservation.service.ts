@@ -1,6 +1,6 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
@@ -13,14 +13,45 @@ export class ReservationService {
     private readonly reservationRepository: Repository<ReservationEntity>,
   ) {}
 
+  async getBookedDates(): Promise<{ checkIn: Date; checkOut: Date }[]> {
+    return this.reservationRepository.find({
+      select: ['checkIn', 'checkOut'],
+      where: { status: In(['new', 'confirmed', 'pending']) },
+    });
+  }
+
+  async getBookedDatesByRoomType(roomType: number): Promise<{ checkIn: Date; checkOut: Date }[]> {
+    return this.reservationRepository.find({
+      select: ['checkIn', 'checkOut'],
+      where: { roomType, status: In(['new', 'confirmed', 'pending']) },
+    });
+  }
+
   async create(createReservationDto: CreateReservationDto) {
+    const checkIn = this.toDate(createReservationDto.checkIn);
+    const checkOut = this.toDate(createReservationDto.checkOut);
+
+    const overlap = await this.reservationRepository
+      .createQueryBuilder('r')
+      .where('r.roomType = :roomType', { roomType: createReservationDto.roomType })
+      .andWhere('r.status IN (:...statuses)', { statuses: ['new', 'confirmed', 'pending'] })
+      .andWhere('r.checkIn < :checkOut AND r.checkOut > :checkIn', {
+        checkIn,
+        checkOut,
+      })
+      .getCount();
+
+    if (overlap > 0) {
+      throw new ConflictException('Selected dates are already booked for this room type');
+    }
+
     const reservation = this.reservationRepository.create({
       ...createReservationDto,
-      checkIn: this.toDate(createReservationDto.checkIn),
-      checkOut: this.toDate(createReservationDto.checkOut),
+      checkIn,
+      checkOut,
       adults: createReservationDto.adults ?? 0,
       children: createReservationDto.children ?? 0,
-      status: createReservationDto.status ?? 'new',
+      status: createReservationDto.status ?? 'pending',
     });
 
     return this.reservationRepository.save(reservation);

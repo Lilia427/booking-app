@@ -8,7 +8,7 @@ services:
     ports:
       - "3000:3000"
     env_file:
-      - deployment/local/.env.local
+      - .env
     depends_on:
       db:
         condition: service_healthy

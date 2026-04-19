@@ -18,7 +18,10 @@ export class ReservationEntity {
     children: number;
 
     @Column()
-    roomType: string;
+    roomType: number;
+
+    @Column()
+    roomName: string;
 
     @Column()
     name: string;
