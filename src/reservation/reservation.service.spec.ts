@@ -69,7 +69,30 @@ describe("ReservationService", () => {
       expect(result).toBe(built);
     });
 
-    it("throws BadRequestException for invalid date", async () => {
+    it('parses DD/MM/YYYY format', async () => {
+      const dto = {
+        checkIn: '01/05/2026',
+        checkOut: '05/05/2026',
+        roomType: 'standard',
+        name: 'John',
+        phone: '+380501234567',
+      } as any;
+      const built = { id: 1, ...dto, adults: 0, children: 0 };
+      repo.create!.mockReturnValue(built);
+      repo.save!.mockResolvedValue(built);
+
+      const result = await service.create(dto);
+
+      expect(repo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          checkIn: new Date('2026-05-01'),
+          checkOut: new Date('2026-05-05'),
+        }),
+      );
+      expect(result).toBe(built);
+    });
+
+    it('throws BadRequestException for invalid date', async () => {
       const dto = {
         checkIn: "not-a-date",
         checkOut: "2026-04-05",

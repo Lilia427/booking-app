@@ -73,7 +73,15 @@ export class ReservationService {
   }
 
   private toDate(value: string): Date {
-    const parsedDate = new Date(value);
+    let iso = value;
+
+    // Accept DD/MM/YYYY (European format used by the frontend)
+    const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (match) {
+      iso = `${match[3]}-${match[2]}-${match[1]}`;
+    }
+
+    const parsedDate = new Date(iso);
 
     if (Number.isNaN(parsedDate.getTime())) {
       throw new BadRequestException(`Invalid date value: ${value}`);
