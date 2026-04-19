@@ -17,11 +17,17 @@ async function bootstrap() {
     allowedHeaders: [
       'Content-Type',
       'Authorization',
+      // Datadog RUM distributed tracing headers
       'x-datadog-origin',
       'x-datadog-trace-id',
       'x-datadog-parent-id',
       'x-datadog-sampling-priority',
       'x-datadog-sampled',
+      // Sentry / W3C Trace Context headers
+      'sentry-trace',
+      'baggage',
+      'traceparent',
+      'tracestate',
     ].join(','),
   });
 
