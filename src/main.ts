@@ -12,7 +12,17 @@ async function bootstrap() {
   app.enableCors({
     origin: process.env.ALLOWED_ORIGINS || '*',
     methods: 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
-    allowedHeaders: 'Content-Type,Authorization',
+    // Datadog RUM injects trace headers for distributed tracing;
+    // they must be explicitly allowed or the browser blocks the preflight.
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'x-datadog-origin',
+      'x-datadog-trace-id',
+      'x-datadog-parent-id',
+      'x-datadog-sampling-priority',
+      'x-datadog-sampled',
+    ].join(','),
   });
 
   // /health is excluded from global prefix (needed for ALB health check)
