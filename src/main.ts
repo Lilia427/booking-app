@@ -2,7 +2,6 @@
 // so it can patch Node's http / express before AppModule loads.
 import './instrument';
 
-import { RequestMethod } from '@nestjs/common';
 import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { SentryExceptionFilter } from './sentry.filter';
@@ -16,14 +15,8 @@ async function bootstrap() {
     allowedHeaders: 'Content-Type,Authorization',
   });
 
-  // /health is needed for ALB health check, / is the public service info endpoint.
-  // Both are excluded from the /api prefix.
-  app.setGlobalPrefix('api', {
-    exclude: [
-      { path: 'health', method: RequestMethod.GET },
-      { path: '/', method: RequestMethod.GET },
-    ],
-  });
+  // /health is excluded from global prefix (needed for ALB health check)
+  app.setGlobalPrefix('api', { exclude: ['health'] });
 
   // Register Sentry exception filter globally so unhandled/5xx errors are
   // captured and reported to Sentry with full stack traces and context.
