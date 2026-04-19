@@ -20,6 +20,7 @@ export class ReservationService {
       checkOut: this.toDate(createReservationDto.checkOut),
       adults: createReservationDto.adults ?? 0,
       children: createReservationDto.children ?? 0,
+      status: createReservationDto.status ?? 'new',
     });
 
     return this.reservationRepository.save(reservation);

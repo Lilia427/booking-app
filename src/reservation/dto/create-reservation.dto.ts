@@ -21,4 +21,6 @@ export class CreateReservationDto {
     
     @IsNotEmpty()
     phone: string;
+
+    status?: string;
 }
