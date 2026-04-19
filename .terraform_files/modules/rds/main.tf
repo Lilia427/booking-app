@@ -18,7 +18,9 @@ resource "aws_db_instance" "db" {
   lifecycle {
     ignore_changes = [engine_version]
   }
-  publicly_accessible = true
+  # DB is reachable only from inside the VPC (ECS tasks) and via the bastion
+  # through SSM Session Manager port forwarding. See CI migrations job.
+  publicly_accessible = false
   skip_final_snapshot = true
   port                = var.db_port
 

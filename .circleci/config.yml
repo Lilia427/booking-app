@@ -109,12 +109,14 @@ jobs:
       - attach_workspace:
           at: ./
       - run:
-          name: Run unit tests
+          name: Run Jest unit tests in node:20-alpine
           command: |
             set -ex
-            docker load -i docker_image_backend.tar
-            # TODO: add tests when ready
-            echo "Tests placeholder — add npm test when tests are implemented"
+            # Use the same Node major version as the production image
+            docker run --rm \
+              -v "$(pwd)":/app \
+              -w /app \
+              node:20-alpine sh -c "npm ci && npm test -- --ci --reporters=default"
 
   run_database_migrations:
     machine:
