@@ -58,6 +58,13 @@ module "ecr" {
   prefix      = local.prefix
 }
 
+module "assets_s3" {
+  source       = "./modules/assets_s3"
+  prefix       = local.prefix
+  project_name = var.project_name
+  common_tags  = local.common_tags
+}
+
 module "ecs_fargate" {
   source              = "./modules/ecs_fargate"
   common_tags         = local.common_tags
@@ -75,6 +82,7 @@ module "ecs_fargate" {
   app_image           = var.app_image
   region              = var.region
   cf_log_group_name   = module.cloud_watch.cf_log_group_name
+  assets_bucket_arn   = module.assets_s3.bucket_arn
 }
 
 module "load_balancer" {

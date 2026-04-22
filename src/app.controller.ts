@@ -13,6 +13,12 @@ export class AppController {
   // ALB health check — excluded from /api prefix via setGlobalPrefix
   @Get('health')
   health(): object {
-    return { status: 'ok' };
+    return {
+      status: 'ok',
+      service: 'booking-api',
+      version: process.env.APP_VERSION ?? 'dev',
+      environment: process.env.NODE_ENV ?? 'development',
+      uptime_seconds: Math.floor(process.uptime()),
+    };
   }
 }

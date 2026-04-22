@@ -85,7 +85,47 @@ resource "aws_iam_role_policy_attachment" "task_execution_role" {
 resource "aws_iam_role_policy_attachment" "task_execution_role_ssm" {
   role       = aws_iam_role.task_execution_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
 
+# S3 assets policy — attached only when assets_bucket_arn is provided.
+# Grants the backend the minimum permissions needed to:
+#   - generate presigned PUT URLs (s3:PutObject)
+#   - serve/read objects (s3:GetObject)
+#   - delete photos from the admin panel (s3:DeleteObject)
+#   - list objects for the admin gallery view (s3:ListBucket)
+data "aws_iam_policy_document" "assets_s3" {
+  count = var.assets_bucket_arn != "" ? 1 : 0
+
+  statement {
+    sid    = "AllowAssetsCRUD"
+    effect = "Allow"
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:DeleteObject",
+    ]
+    resources = ["${var.assets_bucket_arn}/*"]
+  }
+
+  statement {
+    sid       = "AllowAssetsList"
+    effect    = "Allow"
+    actions   = ["s3:ListBucket"]
+    resources = [var.assets_bucket_arn]
+  }
+}
+
+resource "aws_iam_policy" "assets_s3" {
+  count       = var.assets_bucket_arn != "" ? 1 : 0
+  name        = "${var.prefix}-assets-s3-policy"
+  description = "Allow ECS backend to manage cottage photos in S3"
+  policy      = data.aws_iam_policy_document.assets_s3[0].json
+}
+
+resource "aws_iam_role_policy_attachment" "assets_s3" {
+  count      = var.assets_bucket_arn != "" ? 1 : 0
+  role       = aws_iam_role.task_execution_role.name
+  policy_arn = aws_iam_policy.assets_s3[0].arn
 }
 
 data "template_file" "api_container_definitions" {

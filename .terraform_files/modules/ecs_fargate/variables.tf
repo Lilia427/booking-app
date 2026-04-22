@@ -58,3 +58,12 @@ variable "app_image" {}
 variable "region" {}
 
 variable "cf_log_group_name" {}
+
+# Optional: ARN of the assets S3 bucket.
+# When provided the ECS task role receives s3:GetObject/PutObject/DeleteObject
+# so the backend can generate presigned URLs and delete objects.
+variable "assets_bucket_arn" {
+  description = "ARN of the S3 assets bucket (optional)"
+  type        = string
+  default     = ""
+}
