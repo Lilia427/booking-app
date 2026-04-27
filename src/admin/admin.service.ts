@@ -18,6 +18,12 @@ export class UserService {
   ) { }
 
   async create(createAdminDto: CreateAdminDto): Promise<UserProfile> {
+    const adminsCount = await this.userRepository.count();
+
+    if (adminsCount > 0) {
+      throw new BadRequestException('Only one admin account is allowed');
+    }
+
     const existingUserByEmail = await this.userRepository.findOne({ where: { email: createAdminDto.email } });
     const existingUserByName = await this.userRepository.findOne({ where: { name: createAdminDto.name } });
 
@@ -35,6 +41,24 @@ export class UserService {
     const savedUser = await this.userRepository.save(newUser);
 
     return this.toUserProfile(savedUser);
+  }
+
+  async ensureDefaultAdminFromEnv(): Promise<void> {
+    const adminsCount = await this.userRepository.count();
+
+    if (adminsCount > 0) {
+      return;
+    }
+
+    const name = process.env.DEFAULT_ADMIN_NAME;
+    const email = process.env.DEFAULT_ADMIN_EMAIL;
+    const password = process.env.DEFAULT_ADMIN_PASSWORD;
+
+    if (!name || !email || !password) {
+      return;
+    }
+
+    await this.create({ name, email, password });
   }
 
   async login(email: string, password: string): Promise<UserProfile> {

@@ -27,6 +27,7 @@ import { TokenBlacklistService } from "./token-blacklist.service";
 type MockRepo<T = any> = Partial<Record<keyof Repository<T>, jest.Mock>>;
 
 const createMockRepo = <T = any>(): MockRepo<T> => ({
+  count: jest.fn(),
   findOne: jest.fn(),
   find: jest.fn(),
   save: jest.fn(),
@@ -72,6 +73,7 @@ describe("UserService (admin)", () => {
         email: "a@a.com",
         password: "secret",
       } as any;
+      (repo.count as jest.Mock).mockResolvedValue(0);
       (repo.findOne as jest.Mock)
         .mockResolvedValueOnce(null) // by email
         .mockResolvedValueOnce(null); // by name
@@ -87,6 +89,7 @@ describe("UserService (admin)", () => {
     });
 
     it("throws when email already in use", async () => {
+      (repo.count as jest.Mock).mockResolvedValue(0);
       (repo.findOne as jest.Mock).mockResolvedValueOnce({ id: 1 });
 
       await expect(
@@ -95,6 +98,7 @@ describe("UserService (admin)", () => {
     });
 
     it("throws when name already in use", async () => {
+      (repo.count as jest.Mock).mockResolvedValue(0);
       (repo.findOne as jest.Mock)
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({ id: 2 });
@@ -102,6 +106,17 @@ describe("UserService (admin)", () => {
       await expect(
         service.create({ name: "A", email: "a@a.com", password: "x" } as any),
       ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("throws when admin account already exists", async () => {
+      (repo.count as jest.Mock).mockResolvedValue(1);
+
+      await expect(
+        service.create({ name: "A", email: "a@a.com", password: "x" } as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(repo.findOne).not.toHaveBeenCalled();
+      expect(repo.save).not.toHaveBeenCalled();
     });
   });
 

@@ -6,6 +6,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ReservationModule } from './reservation/reservation.module';
 import { AdminModule } from './admin/admin.module';
+import { CottageModule } from './cottage/cottage.module';
 
 
 @Module({
@@ -38,6 +39,7 @@ import { AdminModule } from './admin/admin.module';
     }),
     ReservationModule,
     AdminModule,
+    CottageModule,
   ],
   controllers: [AppController],
   providers: [AppService],

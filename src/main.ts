@@ -5,6 +5,7 @@ import './instrument';
 import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { SentryExceptionFilter } from './sentry.filter';
+import { UserService } from './admin/admin.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -38,6 +39,9 @@ async function bootstrap() {
   // captured and reported to Sentry with full stack traces and context.
   const httpAdapterHost = app.get(HttpAdapterHost);
   app.useGlobalFilters(new SentryExceptionFilter(httpAdapterHost.httpAdapter));
+
+  const userService = app.get(UserService);
+  await userService.ensureDefaultAdminFromEnv();
 
   const port = Number(process.env.PORT ?? 3000);
   await app.listen(port, '0.0.0.0');
