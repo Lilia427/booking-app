@@ -52,26 +52,20 @@ resource "aws_iam_policy" "task_execution_role_policy" {
 }
 
 
-data "template_file" "assume_role_policy" {
-  template = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Action": "sts:AssumeRole",
-      "Principal": {
-        "Service": "ecs-tasks.amazonaws.com"
-      },
-      "Effect": "Allow"
+data "aws_iam_policy_document" "assume_role_policy" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
     }
-  ]
-}
-EOF
+  }
 }
 
 resource "aws_iam_role" "task_execution_role" {
   name               = "${var.prefix}-ecsTaskExecutionRole"
-  assume_role_policy = data.template_file.assume_role_policy.rendered
+  assume_role_policy = data.aws_iam_policy_document.assume_role_policy.json
 
   tags = var.common_tags
 }

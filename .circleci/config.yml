@@ -31,16 +31,12 @@ jobs:
               echo "No terraform changes detected"
               echo 'export update_infra=false' >> $BASH_ENV
             fi
+      - install_terraform
       - run:
           name: Run terraform commands
           command: |
             set -ex
             if [[ "$update_infra" == "true" ]]; then
-              # Install Terraform CLI
-              wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-              echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-              sudo apt update && sudo apt install terraform=1.8.*
-
               # Get current image to preserve it during infra update
               TASK_DEFINITION_ARN=$(aws ecs describe-services \
                 --profile booking-terraform \
@@ -65,8 +61,8 @@ jobs:
               cd .terraform_files/
               terraform init
               terraform workspace select -or-create=true ${CIRCLE_BRANCH}
-              terraform plan -input=false -var-file=environments/${CIRCLE_BRANCH}.tfvars
-              terraform apply -auto-approve -var-file=environments/${CIRCLE_BRANCH}.tfvars
+              terraform plan -input=false
+              terraform apply -auto-approve
             fi
 
   build_docker_image:
@@ -249,6 +245,7 @@ jobs:
       - aws-cli/setup:
           profile_name: booking-terraform
       - configure_aws_credentials
+      - install_terraform
       - run:
           name: Push Docker image to ECR
           command: |
@@ -272,14 +269,11 @@ jobs:
           name: Deploy the application
           command: |
             set -ex
-            wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-            echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-            sudo apt update && sudo apt install terraform=1.8.*
             cd .terraform_files/
             terraform init
             terraform workspace select -or-create=true ${CIRCLE_BRANCH}
-            terraform plan -input=false -var-file=environments/${CIRCLE_BRANCH}.tfvars
-            terraform apply -auto-approve -var-file=environments/${CIRCLE_BRANCH}.tfvars
+            terraform plan -input=false
+            terraform apply -auto-approve
       - run:
           name: Wait for deployment to stabilize
           command: |
@@ -291,6 +285,28 @@ jobs:
               --region $AWS_DEFAULT_REGION
 
 commands:
+  install_terraform:
+    description: "Install Terraform 1.8.x with caching"
+    steps:
+      - restore_cache:
+          keys:
+            - terraform-1.8.5-{{ arch }}-v1
+      - run:
+          name: Install Terraform
+          command: |
+            mkdir -p "$HOME/.local/bin"
+            echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$BASH_ENV"
+            source "$BASH_ENV"
+            if ! command -v terraform &>/dev/null; then
+              wget -q https://releases.hashicorp.com/terraform/1.8.5/terraform_1.8.5_linux_amd64.zip
+              unzip -o terraform_1.8.5_linux_amd64.zip -d "$HOME/.local/bin/"
+              rm terraform_1.8.5_linux_amd64.zip
+            fi
+      - save_cache:
+          key: terraform-1.8.5-{{ arch }}-v1
+          paths:
+            - ~/.local/bin/terraform
+
   configure_aws_credentials:
     steps:
       - run:
