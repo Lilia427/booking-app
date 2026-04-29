@@ -3,14 +3,33 @@ resource "aws_s3_bucket" "assets" {
   tags   = var.common_tags
 }
 
-# Block all public ACL — objects served via presigned URLs only
+# Public read access — cottage photos must be visible to all visitors
 resource "aws_s3_bucket_public_access_block" "assets" {
   bucket = aws_s3_bucket.assets.id
 
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}
+
+# Allow anyone to read objects (GET) — needed for img src in the frontend
+resource "aws_s3_bucket_policy" "assets_public_read" {
+  bucket     = aws_s3_bucket.assets.id
+  depends_on = [aws_s3_bucket_public_access_block.assets]
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "PublicReadGetObject"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.assets.arn}/*"
+      }
+    ]
+  })
 }
 
 resource "aws_s3_bucket_versioning" "assets" {
