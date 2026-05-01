@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 
 import { ReservationService } from './reservation.service';
 import { ReservationEntity } from './entities/reservation.entity';
+import { ReservationNotificationService } from './reservation-notification.service';
 
 type MockRepo<T = any> = Partial<Record<keyof Repository<T>, jest.Mock>>;
 
@@ -29,6 +30,10 @@ describe('ReservationService', () => {
         {
           provide: getRepositoryToken(ReservationEntity),
           useValue: createMockRepo<ReservationEntity>(),
+        },
+        {
+          provide: ReservationNotificationService,
+          useValue: { sendReservationCreatedEmail: jest.fn() },
         },
       ],
     }).compile();
