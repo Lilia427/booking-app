@@ -8,14 +8,6 @@ import {
 } from '@nestjs/common';
 import { BaseExceptionFilter } from '@nestjs/core';
 import * as Sentry from '@sentry/node';
-
-/**
- * Global filter that forwards unhandled and 5xx errors to Sentry while
- * preserving NestJS's default HTTP response handling via BaseExceptionFilter.
- *
- * 4xx client errors (validation, 401/403/404) are intentionally NOT sent —
- * they are expected and would pollute the issues dashboard.
- */
 @Catch()
 export class SentryExceptionFilter extends BaseExceptionFilter {
   private readonly logger = new Logger(SentryExceptionFilter.name);

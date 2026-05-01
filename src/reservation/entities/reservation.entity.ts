@@ -3,35 +3,38 @@ import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 @Entity({ name: 'reservation' })
 export class ReservationEntity {
     @PrimaryGeneratedColumn()
-    id: number;
+    id!: number;
 
     @Column({ type: 'date' })
-    checkIn: Date;
+    checkIn!: Date;
 
     @Column({ type: 'date' })
-    checkOut: Date;
+    checkOut!: Date;
 
     @Column({ default: 0 })
-    adults: number;
+    adults!: number;
 
     @Column({ default: 0 })
-    children: number;
+    children!: number;
 
     @Column()
-    roomType: number;
+    roomType!: number;
 
     @Column()
-    roomName: string;
+    roomName!: string;
 
     @Column()
-    name: string;
+    name!: string;
 
     @Column()
-    phone: string;
+    email!: string;
 
     @Column()
-    status: string;
+    phone!: string;
+
+    @Column()
+    status!: string;
 
     @Column({ default: () => 'CURRENT_TIMESTAMP' })
-    createdAt: Date;
+    createdAt!: Date;
 }

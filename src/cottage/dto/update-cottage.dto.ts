@@ -20,9 +20,7 @@ function toStringArray(value: unknown): string[] {
       if (Array.isArray(parsed)) {
         return parsed.map(String).map((item) => item.trim()).filter(Boolean);
       }
-    } catch {
-      // Fall back to comma-separated parsing.
-    }
+    } catch {}
 
     return trimmed.split(',').map((item) => item.trim()).filter(Boolean);
   }

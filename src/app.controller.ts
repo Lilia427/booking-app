@@ -10,7 +10,6 @@ export class AppController {
     return this.appService.getHello();
   }
 
-  // ALB health check — excluded from /api prefix via setGlobalPrefix
   @Get('health')
   health(): object {
     return {

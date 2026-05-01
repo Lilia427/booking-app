@@ -1,11 +1,11 @@
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class CreateReservationDto {
     @IsNotEmpty()
-    checkIn: string;
+    checkIn!: string;
 
     @IsNotEmpty()
-    checkOut: string;
+    checkOut!: string;
 
     @IsNotEmpty()
     adults?: number;
@@ -14,17 +14,21 @@ export class CreateReservationDto {
     children?: number;
 
     @IsNotEmpty()
-    roomType: number;
+    roomType!: number;
 
     @IsNotEmpty()
     @IsString()
-    roomName: string;
+    roomName!: string;
 
     @IsNotEmpty()
-    name: string;
+    name!: string;
+
+    @IsNotEmpty()
+    @IsEmail()
+    email!: string;
     
     @IsNotEmpty()
-    phone: string;
+    phone!: string;
 
     @IsOptional()
     @IsString()

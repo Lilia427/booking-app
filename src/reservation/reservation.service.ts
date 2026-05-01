@@ -1,16 +1,20 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
 import { ReservationEntity } from './entities/reservation.entity';
+import { ReservationNotificationService } from './reservation-notification.service';
 
 @Injectable()
 export class ReservationService {
+  private readonly logger = new Logger(ReservationService.name);
+
   constructor(
     @InjectRepository(ReservationEntity)
     private readonly reservationRepository: Repository<ReservationEntity>,
+    private readonly reservationNotificationService: ReservationNotificationService,
   ) {}
 
   async getBookedDates(): Promise<{ checkIn: Date; checkOut: Date }[]> {
@@ -54,7 +58,16 @@ export class ReservationService {
       status: createReservationDto.status ?? 'pending',
     });
 
-    return this.reservationRepository.save(reservation);
+    const savedReservation = await this.reservationRepository.save(reservation);
+
+    try {
+      await this.reservationNotificationService.sendReservationCreatedEmail(savedReservation);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to trigger reservation confirmation email for reservation ${savedReservation.id}: ${message}`);
+    }
+
+    return savedReservation;
   }
 
   findAll() {
@@ -106,7 +119,6 @@ export class ReservationService {
   private toDate(value: string): Date {
     let iso = value;
 
-    // Accept DD/MM/YYYY (European format used by the frontend)
     const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
     if (match) {
       iso = `${match[3]}-${match[2]}-${match[1]}`;

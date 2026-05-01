@@ -37,7 +37,6 @@ export class UserService {
     const newUser = new AdminEntity();
     Object.assign(newUser, createAdminDto);
 
-    // Тут можна додати логіку збереження користувача в базі даних
     const savedUser = await this.userRepository.save(newUser);
 
     return this.toUserProfile(savedUser);
@@ -126,7 +125,6 @@ export class UserService {
         ...user,
         token: this.generateJwt(user),
       }
-      // Додайте інші поля, які хочете повернути у відповіді
     };
   }
 
@@ -149,8 +147,7 @@ export class UserService {
       email: user.email,
       name: user.name,
       },
-      secret,
-      // { expiresIn: '1h' }, 
+      secret
     );
   }
 

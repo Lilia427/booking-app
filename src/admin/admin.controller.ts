@@ -14,7 +14,6 @@ export class UserController {
   @Post()
   @UsePipes(new ValidationPipe())
   async create(@Body() createAdminDto: CreateAdminDto): Promise<UserResponse> {
-    // return this.userService.create(createUserDto);
     const user = await this.userService.create(createAdminDto);
     return this.userService.buildUserResponse(user);
 
@@ -23,8 +22,6 @@ export class UserController {
   @Post('login')
   @UsePipes(new ValidationPipe())
   async login(@Body() loginDto: LoginAdminDto): Promise<UserResponse> {
-    // Тут можна додати логіку аутентифікації користувача
-    // Наприклад, перевірити email та пароль, і якщо вони правильні, повернути токен
     const user = await this.userService.login(loginDto.email, loginDto.password);
     return this.userService.buildUserResponse(user);
   }

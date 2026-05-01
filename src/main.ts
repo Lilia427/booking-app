@@ -1,5 +1,3 @@
-// IMPORTANT: Sentry instrumentation must be imported before any other module
-// so it can patch Node's http / express before AppModule loads.
 import './instrument';
 
 import { HttpAdapterHost, NestFactory } from '@nestjs/core';
@@ -13,18 +11,14 @@ async function bootstrap() {
   app.enableCors({
     origin: process.env.ALLOWED_ORIGINS || '*',
     methods: 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
-    // Datadog RUM injects trace headers for distributed tracing;
-    // they must be explicitly allowed or the browser blocks the preflight.
     allowedHeaders: [
       'Content-Type',
       'Authorization',
-      // Datadog RUM distributed tracing headers
       'x-datadog-origin',
       'x-datadog-trace-id',
       'x-datadog-parent-id',
       'x-datadog-sampling-priority',
       'x-datadog-sampled',
-      // Sentry / W3C Trace Context headers
       'sentry-trace',
       'baggage',
       'traceparent',
@@ -32,11 +26,8 @@ async function bootstrap() {
     ].join(','),
   });
 
-  // /health is excluded from global prefix (needed for ALB health check)
   app.setGlobalPrefix('api', { exclude: ['health'] });
 
-  // Register Sentry exception filter globally so unhandled/5xx errors are
-  // captured and reported to Sentry with full stack traces and context.
   const httpAdapterHost = app.get(HttpAdapterHost);
   app.useGlobalFilters(new SentryExceptionFilter(httpAdapterHost.httpAdapter));
 
