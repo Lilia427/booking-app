@@ -11,7 +11,6 @@ jest.mock('@sentry/node', () => ({
   captureException: jest.fn(),
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const Sentry = require('@sentry/node') as { captureException: jest.Mock };
 
 import { SentryExceptionFilter } from './sentry.filter';
@@ -20,7 +19,6 @@ describe('SentryExceptionFilter', () => {
   let filter: SentryExceptionFilter;
 
   beforeEach(() => {
-    // BaseExceptionFilter requires an httpAdapter; stub the two methods it uses.
     const httpAdapter = {
       reply: jest.fn(),
       isHeadersSent: jest.fn().mockReturnValue(false),
@@ -28,7 +26,6 @@ describe('SentryExceptionFilter', () => {
     } as unknown as Parameters<typeof SentryExceptionFilter.prototype.catch>[1];
 
     filter = new SentryExceptionFilter(httpAdapter as any);
-    // Prevent BaseExceptionFilter from actually writing to HTTP in tests.
     jest
       .spyOn(Object.getPrototypeOf(Object.getPrototypeOf(filter)), 'catch')
       .mockImplementation(() => undefined);

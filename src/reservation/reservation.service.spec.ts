@@ -22,31 +22,34 @@ const createMockRepo = <T = any>(): MockRepo<T> => ({
 describe('ReservationService', () => {
   let service: ReservationService;
   let repo: MockRepo<ReservationEntity>;
+  let notificationService: { sendReservationCreatedEmail: jest.Mock };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ReservationService,
         {
-          provide: getRepositoryToken(ReservationEntity),
-          useValue: createMockRepo<ReservationEntity>(),
+          provide: ReservationNotificationService,
+          useValue: {
+            sendReservationCreatedEmail: jest.fn().mockResolvedValue(undefined),
+          },
         },
         {
-          provide: ReservationNotificationService,
-          useValue: { sendReservationCreatedEmail: jest.fn() },
+          provide: getRepositoryToken(ReservationEntity),
+          useValue: createMockRepo<ReservationEntity>(),
         },
       ],
     }).compile();
 
     service = module.get<ReservationService>(ReservationService);
     repo = module.get(getRepositoryToken(ReservationEntity));
+    notificationService = module.get(ReservationNotificationService);
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  // Utility: stub QueryBuilder for overlap check
   const mockQb = (overlapCount: number) => {
     const qb = {
       where: jest.fn().mockReturnThis(),
@@ -92,6 +95,7 @@ describe('ReservationService', () => {
         checkIn: '2026-04-01',
         checkOut: '2026-04-05',
         roomType: 1,
+        roomName: 'Family Cottage',
         name: 'John Doe',
         phone: '+380991234567',
       } as any;
@@ -112,7 +116,26 @@ describe('ReservationService', () => {
         }),
       );
       expect(repo.save).toHaveBeenCalledWith(built);
+      expect(notificationService.sendReservationCreatedEmail).toHaveBeenCalledWith(built);
       expect(result).toBe(built);
+    });
+
+    it('returns reservation even when confirmation email sending fails', async () => {
+      mockQb(0);
+      const dto = {
+        checkIn: '2026-04-01',
+        checkOut: '2026-04-05',
+        roomType: 1,
+        roomName: 'Family Cottage',
+        name: 'John Doe',
+        phone: '+380991234567',
+      } as any;
+      const built = { id: 1, ...dto, adults: 0, children: 0, status: 'pending' };
+      repo.create!.mockReturnValue(built);
+      repo.save!.mockResolvedValue(built);
+      notificationService.sendReservationCreatedEmail.mockRejectedValueOnce(new Error('smtp down'));
+
+      await expect(service.create(dto)).resolves.toBe(built);
     });
 
     it('throws ConflictException when dates overlap for the same room', async () => {
@@ -121,6 +144,7 @@ describe('ReservationService', () => {
         checkIn: '2026-04-01',
         checkOut: '2026-04-05',
         roomType: 1,
+        roomName: 'Family Cottage',
         name: 'Jane',
         phone: '+380001',
       } as any;
@@ -134,6 +158,7 @@ describe('ReservationService', () => {
         checkIn: '01/05/2026',
         checkOut: '05/05/2026',
         roomType: 2,
+        roomName: 'Lake View',
         name: 'John',
         phone: '+380501234567',
       } as any;
@@ -157,6 +182,7 @@ describe('ReservationService', () => {
         checkIn: '2026-05-01',
         checkOut: '2026-05-03',
         roomType: 1,
+        roomName: 'Family Cottage',
         name: 'Alice',
         phone: '+380991234567',
       } as any;
@@ -177,6 +203,7 @@ describe('ReservationService', () => {
         checkIn: 'not-a-date',
         checkOut: '2026-04-05',
         roomType: 1,
+        roomName: 'Family Cottage',
         name: 'John',
         phone: '+380001',
       } as any;

@@ -9,7 +9,6 @@ jest.mock('jsonwebtoken', () => ({
   sign: jest.fn(),
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const jwt = require('jsonwebtoken') as { verify: jest.Mock; sign: jest.Mock };
 
 import { AdminJwtAuthGuard } from './admin-jwt-auth.guard';

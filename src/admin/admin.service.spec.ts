@@ -75,8 +75,8 @@ describe("UserService (admin)", () => {
       } as any;
       (repo.count as jest.Mock).mockResolvedValue(0);
       (repo.findOne as jest.Mock)
-        .mockResolvedValueOnce(null) // by email
-        .mockResolvedValueOnce(null); // by name
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null);
       (repo.save as jest.Mock).mockImplementation(async (entity: any) => ({
         ...entity,
         id: 1,
