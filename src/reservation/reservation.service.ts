@@ -23,7 +23,7 @@ export class ReservationService {
     private readonly reservationNotificationService: ReservationNotificationService,
   ) {}
 
-  async getBookedDates(): Promise<{ checkIn: Date; checkOut: Date }[]> {
+  async getBookedDates(): Promise<{ checkIn: Date | null; checkOut: Date | null }[]> {
     return this.reservationRepository.find({
       select: ['checkIn', 'checkOut'],
       where: {
@@ -34,7 +34,7 @@ export class ReservationService {
     });
   }
 
-  async getBookedDatesByRoomType(roomType: number): Promise<{ checkIn: Date; checkOut: Date }[]> {
+  async getBookedDatesByRoomType(roomType: number): Promise<{ checkIn: Date | null; checkOut: Date | null }[]> {
     return this.reservationRepository.find({
       select: ['checkIn', 'checkOut'],
       where: {
