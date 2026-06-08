@@ -1,11 +1,17 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, IsNull, Not, Repository } from 'typeorm';
 
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
 import { ReservationEntity } from './entities/reservation.entity';
 import { ReservationNotificationService } from './reservation-notification.service';
+
+const ACTIVE_BOOKING_STATUSES = ['new', 'confirmed', 'pending', 'booked'] as const;
+const CANCELLED_STATUSES = ['cancel', 'cancelled', 'canceled'] as const;
+
+const isCancelledStatus = (status: string) =>
+  (CANCELLED_STATUSES as readonly string[]).includes(status);
 
 @Injectable()
 export class ReservationService {
@@ -20,14 +26,23 @@ export class ReservationService {
   async getBookedDates(): Promise<{ checkIn: Date; checkOut: Date }[]> {
     return this.reservationRepository.find({
       select: ['checkIn', 'checkOut'],
-      where: { status: In(['new', 'confirmed', 'pending']) },
+      where: {
+        status: In([...ACTIVE_BOOKING_STATUSES]),
+        checkIn: Not(IsNull()),
+        checkOut: Not(IsNull()),
+      },
     });
   }
 
   async getBookedDatesByRoomType(roomType: number): Promise<{ checkIn: Date; checkOut: Date }[]> {
     return this.reservationRepository.find({
       select: ['checkIn', 'checkOut'],
-      where: { roomType, status: In(['new', 'confirmed', 'pending']) },
+      where: {
+        roomType,
+        status: In([...ACTIVE_BOOKING_STATUSES]),
+        checkIn: Not(IsNull()),
+        checkOut: Not(IsNull()),
+      },
     });
   }
 
@@ -38,7 +53,7 @@ export class ReservationService {
     const overlap = await this.reservationRepository
       .createQueryBuilder('r')
       .where('r.roomType = :roomType', { roomType: createReservationDto.roomType })
-      .andWhere('r.status IN (:...statuses)', { statuses: ['new', 'confirmed', 'pending'] })
+      .andWhere('r.status IN (:...statuses)', { statuses: [...ACTIVE_BOOKING_STATUSES] })
       .andWhere('r.checkIn < :checkOut AND r.checkOut > :checkIn', {
         checkIn,
         checkOut,
@@ -91,15 +106,18 @@ export class ReservationService {
 
   async update(id: number, updateReservationDto: UpdateReservationDto) {
     const reservation = await this.findOne(id);
+    const { checkIn: checkInDto, checkOut: checkOutDto, ...rest } = updateReservationDto;
+    const nextStatus = rest.status ?? reservation.status;
+    const isCancelling = isCancelledStatus(nextStatus);
 
     const updatedReservation = this.reservationRepository.merge(reservation, {
-      ...updateReservationDto,
-      checkIn: updateReservationDto.checkIn
-        ? this.toDate(updateReservationDto.checkIn)
-        : reservation.checkIn,
-      checkOut: updateReservationDto.checkOut
-        ? this.toDate(updateReservationDto.checkOut)
-        : reservation.checkOut,
+      ...rest,
+      checkIn: isCancelling
+        ? null
+        : this.resolveDateForUpdate(checkInDto, reservation.checkIn),
+      checkOut: isCancelling
+        ? null
+        : this.resolveDateForUpdate(checkOutDto, reservation.checkOut),
     });
 
     return this.reservationRepository.save(updatedReservation);
@@ -114,6 +132,14 @@ export class ReservationService {
       deleted: true,
       id,
     };
+  }
+
+  private resolveDateForUpdate(value: string | undefined, fallback: Date | null): Date | null {
+    if (value === undefined || value === null || String(value).trim() === '') {
+      return fallback;
+    }
+
+    return this.toDate(value);
   }
 
   private toDate(value: string): Date {

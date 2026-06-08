@@ -93,7 +93,11 @@ export class ReservationNotificationService {
     `;
   }
 
-  private formatDate(value: Date): string {
+  private formatDate(value: Date | null): string {
+    if (!value) {
+      return '';
+    }
+
     return new Date(value).toISOString().slice(0, 10);
   }
 }

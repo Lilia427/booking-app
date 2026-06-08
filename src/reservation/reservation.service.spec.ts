@@ -250,6 +250,7 @@ describe('ReservationService', () => {
         id: 1,
         checkIn: new Date('2026-04-01'),
         checkOut: new Date('2026-04-05'),
+        status: 'pending',
       } as any;
       const merged = { ...existing, status: 'confirmed' };
 
@@ -259,9 +260,66 @@ describe('ReservationService', () => {
 
       const result = await service.update(1, { status: 'confirmed' } as any);
 
-      expect(repo.merge).toHaveBeenCalled();
+      expect(repo.merge).toHaveBeenCalledWith(
+        existing,
+        expect.objectContaining({
+          status: 'confirmed',
+          checkIn: existing.checkIn,
+          checkOut: existing.checkOut,
+        }),
+      );
       expect(repo.save).toHaveBeenCalledWith(merged);
       expect(result).toBe(merged);
+    });
+
+    it('preserves dates when status changes to booked with empty date fields', async () => {
+      const existing = {
+        id: 1,
+        checkIn: new Date('2026-04-01'),
+        checkOut: new Date('2026-04-05'),
+        status: 'pending',
+      } as any;
+      const merged = { ...existing, status: 'booked' };
+
+      repo.findOneBy!.mockResolvedValue(existing);
+      repo.merge!.mockReturnValue(merged);
+      repo.save!.mockResolvedValue(merged);
+
+      await service.update(1, { status: 'booked', checkIn: '', checkOut: '' } as any);
+
+      expect(repo.merge).toHaveBeenCalledWith(
+        existing,
+        expect.objectContaining({
+          status: 'booked',
+          checkIn: existing.checkIn,
+          checkOut: existing.checkOut,
+        }),
+      );
+    });
+
+    it('clears dates when status changes to cancel', async () => {
+      const existing = {
+        id: 1,
+        checkIn: new Date('2026-04-01'),
+        checkOut: new Date('2026-04-05'),
+        status: 'booked',
+      } as any;
+      const merged = { ...existing, status: 'cancel', checkIn: null, checkOut: null };
+
+      repo.findOneBy!.mockResolvedValue(existing);
+      repo.merge!.mockReturnValue(merged);
+      repo.save!.mockResolvedValue(merged);
+
+      await service.update(1, { status: 'cancel' } as any);
+
+      expect(repo.merge).toHaveBeenCalledWith(
+        existing,
+        expect.objectContaining({
+          status: 'cancel',
+          checkIn: null,
+          checkOut: null,
+        }),
+      );
     });
   });
 

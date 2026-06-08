@@ -5,11 +5,11 @@ export class ReservationEntity {
     @PrimaryGeneratedColumn()
     id!: number;
 
-    @Column({ type: 'date' })
-    checkIn!: Date;
+    @Column({ type: 'date', nullable: true })
+    checkIn!: Date | null;
 
-    @Column({ type: 'date' })
-    checkOut!: Date;
+    @Column({ type: 'date', nullable: true })
+    checkOut!: Date | null;
 
     @Column({ default: 0 })
     adults!: number;
